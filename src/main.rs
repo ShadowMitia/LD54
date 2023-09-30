@@ -2,6 +2,7 @@ use bevy::{prelude::*, sprite::collide_aabb::collide};
 
 fn main() {
     App::new()
+        .add_event::<OnGroundEvent>()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .add_systems(
@@ -36,27 +37,29 @@ struct Acceleration(Vec3);
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 
+    // Floor
     commands.spawn((
         SpriteBundle {
             sprite: Sprite {
                 color: Color::MAROON,
-                custom_size: Some(Vec2::new(500.0, 60.0)),
+                custom_size: Some(Vec2::new(2000.0, 60.0)),
                 ..default()
             },
-            transform: Transform::from_xyz(-200.0, -60.0, 0.0),
+            transform: Transform::from_xyz(-200.0, -350.0, 0.0),
             ..default()
         },
         Collision,
     ));
 
+    // Teller
     commands.spawn((
         SpriteBundle {
             sprite: Sprite {
                 color: Color::PURPLE,
-                custom_size: Some(Vec2::new(64.0, 60.0)),
+                custom_size: Some(Vec2::new(24.0, 35.0)),
                 ..default()
             },
-            transform: Transform::from_xyz(-200.0, 0.0, 0.0),
+            transform: Transform::from_xyz(-400.0, -300.0, 0.0),
             ..default()
         },
         Collision,
@@ -76,11 +79,26 @@ fn setup(mut commands: Commands) {
         Acceleration(Vec3::ZERO),
         Collision,
     ));
+    commands.spawn((
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::CYAN,
+                custom_size: Some(Vec2::new(32.0, 32.0)),
+                ..default()
+            },
+            transform: Transform::from_xyz(-500.0, -200.0, 0.0),
+            ..default()
+        },
+        NPC,
+        Velocity(Vec3::ZERO),
+        Acceleration(Vec3::ZERO),
+        Collision,
+    ));
 }
 
 fn gravity_system(mut q_physics: Query<&mut Acceleration>) {
     for mut acc in q_physics.iter_mut() {
-        info!("oh gravity");
+        //info!("oh gravity");
         acc.0.y -= 1.0;
     }
 }
@@ -90,7 +108,7 @@ fn physics_system(
     time_step: Res<FixedTime>,
 ) {
     for (mut trans, mut vel, mut acc) in q_physics.iter_mut() {
-        info!("updating physics");
+        //info!("updating physics");
         vel.0 += acc.0;
         acc.0 = Vec3::ZERO;
         /*
@@ -102,66 +120,92 @@ fn physics_system(
     }
 }
 
+#[derive(Event)]
+struct OnGroundEvent {
+    entity: Entity,
+}
+
 fn collision_system(
-    q_colliders: Query<(&Transform, &Sprite), (With<Collision>, Without<Player>)>,
-    mut q_player: Query<(&mut Transform, &Sprite, &mut Acceleration, &mut Velocity), With<Player>>,
+    q_colliders: Query<(&Transform, &Sprite), (With<Collision>, Without<Player>, Without<NPC>)>,
+    mut q_player: Query<
+        (
+            Entity,
+            &mut Transform,
+            &Sprite,
+            &mut Acceleration,
+            &mut Velocity,
+        ),
+        (With<Collision>, Or<(With<Player>, With<NPC>)>),
+    >,
+    mut my_events: EventWriter<OnGroundEvent>,
 ) {
-    let (mut player_trans, player_sprite, mut acc, mut vel) =
-        q_player.get_single_mut().expect("Always a player");
+    // TODO: could be simplified with iter_combinations?
+    for (ent, mut player_trans, player_sprite, mut acc, mut vel) in q_player.iter_mut() {
+        for (transform, sprite) in q_colliders.iter() {
+            //info!("checking collisions");
+            let collision = collide(
+                player_trans.translation,
+                player_sprite.custom_size.unwrap(),
+                transform.translation,
+                sprite.custom_size.unwrap(),
+            );
 
-    for (transform, sprite) in q_colliders.iter() {
-        info!("checking collisions");
-        let collision = collide(
-            player_trans.translation,
-            player_sprite.custom_size.unwrap(),
-            transform.translation,
-            sprite.custom_size.unwrap(),
-        );
+            if let Some(collision) = collision {
+                //info!("collision");
+                let half_size = sprite.custom_size.unwrap() / 2.0;
+                let player_half_size = player_sprite.custom_size.unwrap() / 2.0;
 
-        if let Some(collision) = collision {
-            info!("collision");
-            let half_size = sprite.custom_size.unwrap() / 2.0;
-            let player_half_size = player_sprite.custom_size.unwrap() / 2.0;
-
-            match dbg!(collision) {
-                bevy::sprite::collide_aabb::Collision::Left => {
-                    acc.0.x = 0.0;
-                    vel.0.x = 0.0;
-                    player_trans.translation.x =
-                        transform.translation.x - half_size.x - player_half_size.x
+                match collision {
+                    bevy::sprite::collide_aabb::Collision::Left => {
+                        acc.0.x = 0.0;
+                        vel.0.x = 0.0;
+                        player_trans.translation.x =
+                            transform.translation.x - half_size.x - player_half_size.x
+                    }
+                    bevy::sprite::collide_aabb::Collision::Right => {
+                        acc.0.x = 0.0;
+                        vel.0.x = 0.0;
+                        player_trans.translation.x =
+                            transform.translation.x + half_size.x + player_half_size.x
+                    }
+                    bevy::sprite::collide_aabb::Collision::Top => {
+                        my_events.send(OnGroundEvent { entity: ent });
+                        acc.0.y = 0.0;
+                        vel.0.y = 0.0;
+                        player_trans.translation.y =
+                            transform.translation.y + half_size.y + player_half_size.y
+                    }
+                    bevy::sprite::collide_aabb::Collision::Bottom => {
+                        acc.0.y = 0.0;
+                        vel.0.y = 0.0;
+                        player_trans.translation.y =
+                            transform.translation.y - half_size.y - player_half_size.y
+                    }
+                    bevy::sprite::collide_aabb::Collision::Inside => unreachable!(),
                 }
-                bevy::sprite::collide_aabb::Collision::Right => {
-                    acc.0.x = 0.0;
-                    vel.0.x = 0.0;
-                    player_trans.translation.x =
-                        transform.translation.x + half_size.x + player_half_size.x
-                }
-                bevy::sprite::collide_aabb::Collision::Top => {
-                    acc.0.y = 0.0;
-                    vel.0.y = 0.0;
-                    player_trans.translation.y =
-                        transform.translation.y + half_size.y + player_half_size.y
-                }
-                bevy::sprite::collide_aabb::Collision::Bottom => {
-                    acc.0.y = 0.0;
-                    vel.0.y = 0.0;
-                    player_trans.translation.y =
-                        transform.translation.y - half_size.y - player_half_size.y
-                }
-                bevy::sprite::collide_aabb::Collision::Inside => unreachable!(),
             }
         }
     }
 }
 
-fn jump_system(
-    keyboard_input: Res<Input<KeyCode>>,
-    mut player: Query<&mut Velocity, With<Player>>,
-) {
-    let mut player = player.get_single_mut().expect("Always a player");
+#[derive(Component)]
+struct Jumping;
 
-    if keyboard_input.just_pressed(KeyCode::Space) {
-        player.0.y += 100.0;
+// TODO: this still has double jump for some reason?
+fn jump_system(
+    mut commands: Commands,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut player: Query<(Entity, &mut Acceleration, Option<&Jumping>), With<Player>>,
+    mut events: EventReader<OnGroundEvent>,
+) {
+    for OnGroundEvent { entity } in events.iter() {
+        commands.entity(*entity).remove::<Jumping>();
+    }
+    for (ent, mut acc, is_jumping) in player.iter_mut() {
+        if !is_jumping.is_some() && keyboard_input.just_pressed(KeyCode::Space) {
+            acc.0.y += 100.0;
+            commands.entity(ent).insert(Jumping);
+        }
     }
 }
 
