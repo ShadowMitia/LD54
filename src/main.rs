@@ -22,7 +22,14 @@ fn main() {
             )
                 .chain(),
         )
-        .add_systems(Update, (trigger_ingredient_system, teller_system))
+        .add_systems(
+            Update,
+            (
+                trigger_ingredient_system,
+                teller_system,
+                cooking_table_system,
+            ),
+        )
         .run();
 }
 
@@ -114,6 +121,23 @@ fn setup(mut commands: Commands) {
     spawn_ingredient(&mut commands, IngredientType::Two);
     spawn_ingredient(&mut commands, IngredientType::Three);
     spawn_ingredient(&mut commands, IngredientType::Four);
+
+    // Cooking table
+    commands.spawn((
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::RED,
+                custom_size: Some(Vec2::new(44.0, 35.0)),
+                ..default()
+            },
+            transform: Transform::from_xyz(400.0, -300.0, 0.0),
+            ..default()
+        },
+        Collision,
+        CollisionBox(Vec3::new(44.0, 35.0, 0.0)),
+        CookingTable,
+        TriggerBox(Vec3::new(50.0, 40.0, 0.0)),
+    ));
 }
 
 fn gravity_system(mut q_physics: Query<&mut Acceleration>) {
@@ -356,6 +380,69 @@ fn teller_system(
         ),
         With<Player>,
     >,
+    q_ingredients: Query<(Entity, &Cake)>,
+) {
+
+    let (player, player_trans, player_sprite, mut inventory, children) =
+        q_player.get_single_mut().expect("Always a player");
+
+    for (transform, sprite) in q.iter_mut() {
+        //info!("checking collisions");
+        let collision = collide(
+            player_trans.translation,
+            player_sprite.0.truncate(),
+            transform.translation,
+            sprite.0.truncate(),
+        );
+
+        if collision.is_some() {
+	    if let Some(cake) = &inventory.cake {
+		let (ent, cake) = q_ingredients.get_single().expect("Should be a cake there");
+		commands.entity(ent).despawn_recursive();
+		inventory.cake = None;
+	    }
+	}
+    }
+}
+
+#[derive(Component)]
+struct Inventory {
+    items: [Option<IngredientType>; 3],
+    cake: Option<CakeType>,
+}
+
+impl Inventory {
+    fn new() -> Self {
+        Self {
+            items: [None, None, None],
+            cake: None,
+        }
+    }
+}
+
+#[derive(Component)]
+struct CookingTable;
+
+#[derive(Component)]
+struct Cake(CakeType);
+
+enum CakeType {
+    Chocolate,
+}
+
+fn cooking_table_system(
+    mut commands: Commands,
+    mut q: Query<(&mut Transform, &TriggerBox), (With<CookingTable>, Without<Player>)>,
+    mut q_player: Query<
+        (
+            Entity,
+            &Transform,
+            &CollisionBox,
+            &mut Inventory,
+            Option<&Children>,
+        ),
+        With<Player>,
+    >,
     q_ingredients: Query<(Entity, &Ingredient)>,
 ) {
     let (player, player_trans, player_sprite, mut inventory, children) =
@@ -371,6 +458,7 @@ fn teller_system(
         );
 
         if collision.is_some() {
+            //info!("cooking table");
             if let Some(children) = children {
                 info!("Checking {:?}", children);
                 for &child in children.iter() {
@@ -384,22 +472,26 @@ fn teller_system(
                         }
                         commands.entity(player).despawn_descendants();
                         spawn_ingredient(&mut commands, ing.clone());
+
+                        commands
+                            .spawn((
+                                SpriteBundle {
+                                    sprite: Sprite {
+                                        color: Color::BEIGE,
+                                        custom_size: Some(Vec2::new(32.0, 32.0)),
+                                        ..default()
+                                    },
+                                    transform: Transform::from_xyz(0.0, 40.0, 0.0),
+                                    ..default()
+                                },
+                                Cake(CakeType::Chocolate),
+                            ))
+                            .set_parent(player);
+
+			 inventory.cake = Some(CakeType::Chocolate);
                     }
                 }
             }
-        }
-    }
-}
-
-#[derive(Component)]
-struct Inventory {
-    items: [Option<IngredientType>; 3],
-}
-
-impl Inventory {
-    fn new() -> Self {
-        Self {
-            items: [None, None, None],
         }
     }
 }
