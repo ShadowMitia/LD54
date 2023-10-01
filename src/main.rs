@@ -1,4 +1,8 @@
-use bevy::{prelude::*, sprite::collide_aabb::collide};
+use bevy::{
+    prelude::*,
+    sprite::collide_aabb::collide,
+    utils::{HashMap, HashSet},
+};
 
 #[derive(Component)]
 struct CollisionBox(Vec3);
@@ -9,6 +13,7 @@ struct TriggerBox(Vec3);
 fn main() {
     App::new()
         .add_event::<OnGroundEvent>()
+        .insert_resource(Recipes(HashMap::new()))
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .add_systems(
@@ -48,8 +53,34 @@ struct Velocity(Vec3);
 #[derive(Component)]
 struct Acceleration(Vec3);
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
     commands.spawn(Camera2dBundle::default());
+
+    let r = vec![
+        (
+            CakeType::Chocolate,
+            Recipe::new(&[
+                IngredientType::Eggs,
+                IngredientType::Flour,
+                IngredientType::Chocolate,
+                IngredientType::Milk,
+            ]),
+        ),
+        (
+            CakeType::Fraisier,
+            Recipe::new(&[
+                IngredientType::Eggs,
+                IngredientType::Flour,
+                IngredientType::Strawberry,
+                IngredientType::Milk,
+            ]),
+        ),
+    ];
+
+    for (cake, ings) in r {
+        info!("Adding {:?} with {:?}", cake, ings);
+        recipes.0.insert(ings, cake);
+    }
 
     // Floor
     commands.spawn((
@@ -117,10 +148,11 @@ fn setup(mut commands: Commands) {
         CollisionBox(Vec3::new(32.0, 32.0, 0.0)),
     ));
 
-    spawn_ingredient(&mut commands, IngredientType::One);
-    spawn_ingredient(&mut commands, IngredientType::Two);
-    spawn_ingredient(&mut commands, IngredientType::Three);
-    spawn_ingredient(&mut commands, IngredientType::Four);
+    spawn_ingredient(&mut commands, IngredientType::Eggs);
+    spawn_ingredient(&mut commands, IngredientType::Flour);
+    spawn_ingredient(&mut commands, IngredientType::Chocolate);
+    spawn_ingredient(&mut commands, IngredientType::Milk);
+    spawn_ingredient(&mut commands, IngredientType::Strawberry);
 
     // Cooking table
     commands.spawn((
@@ -239,7 +271,6 @@ fn collision_system(
 #[derive(Component)]
 struct Jumping;
 
-// TODO: this still has double jump for some reason?
 fn jump_system(
     mut commands: Commands,
     keyboard_input: Res<Input<KeyCode>>,
@@ -274,30 +305,33 @@ fn movement_system(
 #[derive(Component)]
 struct Ingredient(IngredientType);
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum IngredientType {
-    One,
-    Two,
-    Three,
-    Four,
+    Eggs,
+    Flour,
+    Chocolate,
+    Milk,
+    Strawberry,
 }
 
 fn spawn_ingredient(commands: &mut Commands, ingredient: IngredientType) {
     let color = {
         match ingredient {
-            IngredientType::One => Color::YELLOW_GREEN,
-            IngredientType::Two => Color::DARK_GREEN,
-            IngredientType::Three => Color::LIME_GREEN,
-            IngredientType::Four => Color::YELLOW,
+            IngredientType::Eggs => Color::YELLOW,
+            IngredientType::Flour => Color::WHITE,
+            IngredientType::Chocolate => Color::MAROON,
+            IngredientType::Milk => Color::ANTIQUE_WHITE,
+            IngredientType::Strawberry => Color::PINK,
         }
     };
 
     let position = {
         match ingredient {
-            IngredientType::One => Vec3::new(0.0, -300.0, 0.0),
-            IngredientType::Two => Vec3::new(200.0, -300.0, 0.0),
-            IngredientType::Three => Vec3::new(-100.0, -300.0, 0.0),
-            IngredientType::Four => Vec3::new(-80.0, -300.0, 0.0),
+            IngredientType::Eggs => Vec3::new(0.0, -300.0, 0.0),
+            IngredientType::Flour => Vec3::new(200.0, -300.0, 0.0),
+            IngredientType::Chocolate => Vec3::new(-100.0, -300.0, 0.0),
+            IngredientType::Milk => Vec3::new(-80.0, -300.0, 0.0),
+            IngredientType::Strawberry => Vec3::new(250.0, -300.0, 0.0),
         }
     };
 
@@ -338,12 +372,10 @@ fn trigger_ingredient_system(
 
         if collision.is_some() {
             if !inventory.items.contains(&Some(ing.clone())) {
-                if inventory.items[0] == None {
-                    inventory.items[0] = Some(ing.clone());
-                } else if inventory.items[1] == None {
-                    inventory.items[1] = Some(ing.clone());
-                } else if inventory.items[2] == None {
-                    inventory.items[2] = Some(ing.clone());
+                let toto = inventory.items.iter_mut().find(|el| el == &&mut None);
+
+                if let Some(toto) = toto {
+                    *toto = Some(ing.clone());
                 } else {
                     // Inventory full
                     break;
@@ -353,9 +385,10 @@ fn trigger_ingredient_system(
 
                 let diff = match count {
                     0 => unreachable!(),
-                    1 => -1.0,
-                    2 => 0.0,
-                    3 => 1.0,
+                    1 => -1.5,
+                    2 => -0.75,
+                    3 => 0.75,
+                    4 => 1.5,
                     _ => unreachable!(),
                 };
 
@@ -382,7 +415,6 @@ fn teller_system(
     >,
     q_ingredients: Query<(Entity, &Cake)>,
 ) {
-
     let (player, player_trans, player_sprite, mut inventory, children) =
         q_player.get_single_mut().expect("Always a player");
 
@@ -396,25 +428,25 @@ fn teller_system(
         );
 
         if collision.is_some() {
-	    if let Some(cake) = &inventory.cake {
-		let (ent, cake) = q_ingredients.get_single().expect("Should be a cake there");
-		commands.entity(ent).despawn_recursive();
-		inventory.cake = None;
-	    }
-	}
+            if let Some(cake) = &inventory.cake {
+                let (ent, cake) = q_ingredients.get_single().expect("Should be a cake there");
+                commands.entity(ent).despawn_recursive();
+                inventory.cake = None;
+            }
+        }
     }
 }
 
 #[derive(Component)]
 struct Inventory {
-    items: [Option<IngredientType>; 3],
+    items: [Option<IngredientType>; 4],
     cake: Option<CakeType>,
 }
 
 impl Inventory {
     fn new() -> Self {
         Self {
-            items: [None, None, None],
+            items: [None, None, None, None],
             cake: None,
         }
     }
@@ -426,8 +458,10 @@ struct CookingTable;
 #[derive(Component)]
 struct Cake(CakeType);
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum CakeType {
     Chocolate,
+    Fraisier,
 }
 
 fn cooking_table_system(
@@ -444,6 +478,7 @@ fn cooking_table_system(
         With<Player>,
     >,
     q_ingredients: Query<(Entity, &Ingredient)>,
+    recipes: Res<Recipes>,
 ) {
     let (player, player_trans, player_sprite, mut inventory, children) =
         q_player.get_single_mut().expect("Always a player");
@@ -458,40 +493,79 @@ fn cooking_table_system(
         );
 
         if collision.is_some() {
-            //info!("cooking table");
-            if let Some(children) = children {
-                info!("Checking {:?}", children);
-                for &child in children.iter() {
-                    if let Ok((_, Ingredient(ing))) = q_ingredients.get(child) {
-                        if inventory.items[0] == Some(ing.clone()) {
-                            inventory.items[0] = None;
-                        } else if inventory.items[1] == Some(ing.clone()) {
-                            inventory.items[1] = None;
-                        } else if inventory.items[2] == Some(ing.clone()) {
-                            inventory.items[2] = None;
+            let cake = 'cake: {
+                'recipes: for (Recipe { ingredients }, v) in recipes.0.iter() {
+                    info!("Checking if {:?}", v);
+                    for ing in inventory.items.iter() {
+                        info!("ingredient? {:?}", ing);
+                        if let Some(ing) = ing {
+                            if !dbg!(ingredients).contains(ing) {
+                                // Check next recipe
+                                continue 'recipes;
+                            }
+                        } else {
+                            // Got None, missing ingredients
+                            return;
                         }
-                        commands.entity(player).despawn_descendants();
-                        spawn_ingredient(&mut commands, ing.clone());
-
-                        commands
-                            .spawn((
-                                SpriteBundle {
-                                    sprite: Sprite {
-                                        color: Color::BEIGE,
-                                        custom_size: Some(Vec2::new(32.0, 32.0)),
-                                        ..default()
-                                    },
-                                    transform: Transform::from_xyz(0.0, 40.0, 0.0),
-                                    ..default()
-                                },
-                                Cake(CakeType::Chocolate),
-                            ))
-                            .set_parent(player);
-
-			 inventory.cake = Some(CakeType::Chocolate);
                     }
+                    break 'cake Some(v.clone());
                 }
+                None
+            };
+
+            if let Some(cake) = cake {
+                // We have cake!
+
+                // Clear all ingredients
+                for item in inventory.items.iter_mut() {
+                    if let Some(item) = item {
+                        spawn_ingredient(&mut commands, item.clone());
+                    }
+                    *item = None;
+                }
+                // Clear what player is carrying
+                commands.entity(player).despawn_descendants();
+
+                let color = match cake {
+                    CakeType::Chocolate => Color::SALMON,
+                    CakeType::Fraisier => Color::GOLD,
+                };
+
+                // Spawn the cake
+                commands
+                    .spawn((
+                        SpriteBundle {
+                            sprite: Sprite {
+                                color,
+                                custom_size: Some(Vec2::new(32.0, 32.0)),
+                                ..default()
+                            },
+                            transform: Transform::from_xyz(0.0, 40.0, 0.0),
+                            ..default()
+                        },
+                        Cake(cake.clone()),
+                    ))
+                    .set_parent(player);
+
+                // Add to inventory
+                inventory.cake = Some(cake);
             }
+        }
+    }
+}
+
+#[derive(Resource)]
+struct Recipes(HashMap<Recipe, CakeType>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct Recipe {
+    ingredients: Vec<IngredientType>,
+}
+
+impl Recipe {
+    fn new(ingredients: &[IngredientType]) -> Self {
+        Self {
+            ingredients: Vec::from(ingredients),
         }
     }
 }
