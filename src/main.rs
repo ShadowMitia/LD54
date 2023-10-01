@@ -1,8 +1,6 @@
-use bevy::{
-    prelude::*,
-    sprite::collide_aabb::collide,
-    utils::{HashMap},
-};
+use bevy::{prelude::*, sprite::collide_aabb::collide, utils::HashMap};
+
+use rand::{distributions::Standard, prelude::Distribution, Rng};
 
 #[derive(Component)]
 struct CollisionBox(Vec3);
@@ -40,7 +38,9 @@ fn main() {
 }
 
 #[derive(Component)]
-struct NPC;
+struct NPC {
+    wants: CakeType,
+}
 
 #[derive(Component)]
 struct Player;
@@ -132,7 +132,9 @@ fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
         Inventory::new(),
     ));
 
-    commands.spawn((
+    let cake: CakeType = rand::random();
+
+    let npc = commands.spawn((
         SpriteBundle {
             sprite: Sprite {
                 color: Color::CYAN,
@@ -142,12 +144,18 @@ fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
             transform: Transform::from_xyz(-500.0, -200.0, 0.0),
             ..default()
         },
-        NPC,
+        NPC {
+            wants: cake.clone(),
+        },
         Velocity(Vec3::ZERO),
         Acceleration(Vec3::ZERO),
         Collision,
         CollisionBox(Vec3::new(32.0, 32.0, 0.0)),
     ));
+
+    let id = &npc.id();
+
+    spawn_display_cake(&mut commands, Vec3::new(0.0, 30.0, 0.0), cake, id);
 
     spawn_ingredient(&mut commands, IngredientType::Eggs);
     spawn_ingredient(&mut commands, IngredientType::Flour);
@@ -417,6 +425,10 @@ fn trigger_ingredient_system(
 fn teller_system(
     mut commands: Commands,
     mut q: Query<(&mut Transform, &TriggerBox), (With<Teller>, Without<Player>)>,
+    mut q_npc: Query<
+        (Entity, &mut Transform, &mut NPC),
+        (Without<Player>, With<NPC>, Without<Teller>),
+    >,
     mut q_player: Query<
         (
             Entity,
@@ -443,9 +455,25 @@ fn teller_system(
 
         if collision.is_some() {
             if let Some(_cake) = &inventory.cake {
-                let (ent, _cake) = q_ingredients.get_single().expect("Should be a cake there");
-                commands.entity(ent).despawn_recursive();
-                inventory.cake = None;
+                let (npc_e, mut npc_trans, mut npc) =
+                    q_npc.get_single_mut().expect("Always an NPC");
+
+                let (ent, Cake(cake)) = q_ingredients.get_single().expect("Should be a cake there");
+                if npc.wants == *cake {
+                    commands.entity(ent).despawn_recursive();
+                    commands.entity(npc_e).despawn_descendants();
+
+                    inventory.cake = None;
+                    npc_trans.translation.y += 50.0;
+                    npc.wants = rand::random();
+
+                    spawn_display_cake(
+                        &mut commands,
+                        Vec3::new(0.0, 30.0, 0.0),
+                        npc.wants.clone(),
+                        &npc_e,
+                    );
+                }
             }
         }
     }
@@ -476,6 +504,72 @@ struct Cake(CakeType);
 enum CakeType {
     Chocolate,
     Fraisier,
+}
+
+// NOTE: Could be a macro to autogen?
+impl Distribution<CakeType> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> CakeType {
+        let index: u8 = rng.gen_range(0..2);
+        match index {
+            0 => CakeType::Chocolate,
+            1 => CakeType::Fraisier,
+            _ => unreachable!(),
+        }
+    }
+}
+
+fn spawn_cake(commands: &mut Commands, position: Vec3, cake: CakeType, parent: &Entity) -> Entity {
+    let color = {
+        match cake {
+            CakeType::Chocolate => Color::SALMON,
+            CakeType::Fraisier => Color::GOLD,
+        }
+    };
+
+    let id = commands
+        .spawn((
+            SpriteBundle {
+                sprite: Sprite {
+                    color,
+                    custom_size: Some(Vec2::new(32.0, 32.0)),
+                    ..default()
+                },
+                transform: Transform::from_translation(position),
+                ..default()
+            },
+            Cake(cake),
+        ))
+        .set_parent(*parent)
+        .id();
+    id
+}
+
+fn spawn_display_cake(
+    commands: &mut Commands,
+    position: Vec3,
+    cake: CakeType,
+    parent: &Entity,
+) -> Entity {
+    let color = {
+        match cake {
+            CakeType::Chocolate => Color::SALMON,
+            CakeType::Fraisier => Color::GOLD,
+        }
+    };
+
+    let id = commands
+        .spawn((SpriteBundle {
+            sprite: Sprite {
+                color,
+                custom_size: Some(Vec2::new(32.0, 32.0)),
+                ..default()
+            },
+            transform: Transform::from_translation(position).with_scale(Vec3::new(0.4, 0.4, 0.0)),
+            ..default()
+        },))
+        .set_parent(*parent)
+        .id();
+    id
 }
 
 fn cooking_table_system(
@@ -509,11 +603,9 @@ fn cooking_table_system(
         if collision.is_some() {
             let cake = 'cake: {
                 'recipes: for (Recipe { ingredients }, v) in recipes.0.iter() {
-                    info!("Checking if {:?}", v);
                     for ing in inventory.items.iter() {
-                        info!("ingredient? {:?}", ing);
                         if let Some(ing) = ing {
-                            if !dbg!(ingredients).contains(ing) {
+                            if !ingredients.contains(ing) {
                                 // Check next recipe
                                 continue 'recipes;
                             }
@@ -540,26 +632,13 @@ fn cooking_table_system(
                 // Clear what player is carrying
                 commands.entity(player).despawn_descendants();
 
-                let color = match cake {
-                    CakeType::Chocolate => Color::SALMON,
-                    CakeType::Fraisier => Color::GOLD,
-                };
-
                 // Spawn the cake
-                commands
-                    .spawn((
-                        SpriteBundle {
-                            sprite: Sprite {
-                                color,
-                                custom_size: Some(Vec2::new(32.0, 32.0)),
-                                ..default()
-                            },
-                            transform: Transform::from_xyz(0.0, 40.0, 0.0),
-                            ..default()
-                        },
-                        Cake(cake.clone()),
-                    ))
-                    .set_parent(player);
+                spawn_cake(
+                    &mut commands,
+                    Vec3::new(0.0, 40.0, 0.0),
+                    cake.clone(),
+                    &player,
+                );
 
                 // Add to inventory
                 inventory.cake = Some(cake);
