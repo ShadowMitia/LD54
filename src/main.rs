@@ -33,6 +33,7 @@ fn main() {
                 trigger_ingredient_system,
                 teller_system,
                 cooking_table_system,
+                bin_system,
             ),
         )
         .run();
@@ -168,6 +169,21 @@ fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
         Collision,
         CollisionBox(Vec3::new(44.0, 35.0, 0.0)),
         CookingTable,
+        TriggerBox(Vec3::new(50.0, 40.0, 0.0)),
+    ));
+
+    // Bin
+    commands.spawn((
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::DARK_GRAY,
+                custom_size: Some(Vec2::new(44.0, 35.0)),
+                ..default()
+            },
+            transform: Transform::from_xyz(-350.0, -300.0, 0.0),
+            ..default()
+        },
+        Bin,
         TriggerBox(Vec3::new(50.0, 40.0, 0.0)),
     ));
 }
@@ -566,6 +582,43 @@ impl Recipe {
     fn new(ingredients: &[IngredientType]) -> Self {
         Self {
             ingredients: Vec::from(ingredients),
+        }
+    }
+}
+
+#[derive(Component)]
+struct Bin;
+
+fn bin_system(
+    mut commands: Commands,
+    q_bin: Query<(&Transform, &TriggerBox), With<Bin>>,
+    mut q_player: Query<(Entity, &Transform, &CollisionBox, &mut Inventory)>,
+    keyboard_input: Res<Input<KeyCode>>,
+) {
+    let (player, player_trans, player_box, mut inventory) =
+        q_player.get_single_mut().expect("Always a player");
+
+    let (bin_trans, bin_box) = q_bin.get_single().expect("Always a bin");
+
+    //info!("checking collisions");
+    let collision = collide(
+        player_trans.translation,
+        player_box.0.truncate(),
+        bin_trans.translation,
+        bin_box.0.truncate(),
+    );
+
+    if collision.is_some() {
+        if keyboard_input.just_pressed(KeyCode::C) {
+            for item in inventory.items.iter_mut() {
+                if let Some(ing) = item {
+                    spawn_ingredient(&mut commands, ing.clone());
+                }
+                *item = None;
+            }
+            inventory.cake = None;
+
+            commands.entity(player).despawn_descendants();
         }
     }
 }
