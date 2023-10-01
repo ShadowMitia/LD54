@@ -121,8 +121,7 @@ fn setup_game(mut commands: Commands, mut recipes: ResMut<Recipes>, mut score: R
     score.0 = 0;
 
     commands.insert_resource(LevelTimer(Timer::new(
-        //        Duration::from_secs(60 * 15),
-        Duration::from_secs(1),
+        Duration::from_secs(60 * 15),
         TimerMode::Once,
     )));
 
@@ -142,6 +141,15 @@ fn setup_game(mut commands: Commands, mut recipes: ResMut<Recipes>, mut score: R
                 IngredientType::Eggs,
                 IngredientType::Flour,
                 IngredientType::Strawberry,
+                IngredientType::Milk,
+            ]),
+        ),
+        (
+            CakeType::Carrot,
+            Recipe::new(&[
+                IngredientType::Eggs,
+                IngredientType::Flour,
+                IngredientType::Carrot,
                 IngredientType::Milk,
             ]),
         ),
@@ -230,11 +238,13 @@ fn setup_game(mut commands: Commands, mut recipes: ResMut<Recipes>, mut score: R
 
     spawn_display_cake(&mut commands, Vec3::new(0.0, 30.0, 0.0), cake, id);
 
+
     spawn_ingredient(&mut commands, IngredientType::Eggs);
     spawn_ingredient(&mut commands, IngredientType::Flour);
     spawn_ingredient(&mut commands, IngredientType::Chocolate);
     spawn_ingredient(&mut commands, IngredientType::Milk);
     spawn_ingredient(&mut commands, IngredientType::Strawberry);
+  spawn_ingredient(&mut commands, IngredientType::Carrot);
 
     // Cooking table
     commands.spawn((
@@ -411,6 +421,7 @@ enum IngredientType {
     Chocolate,
     Milk,
     Strawberry,
+    Carrot,
 }
 
 fn spawn_ingredient(commands: &mut Commands, ingredient: IngredientType) {
@@ -421,6 +432,7 @@ fn spawn_ingredient(commands: &mut Commands, ingredient: IngredientType) {
             IngredientType::Chocolate => Color::MAROON,
             IngredientType::Milk => Color::ANTIQUE_WHITE,
             IngredientType::Strawberry => Color::PINK,
+            IngredientType::Carrot => Color::ORANGE,
         }
     };
 
@@ -431,6 +443,7 @@ fn spawn_ingredient(commands: &mut Commands, ingredient: IngredientType) {
             IngredientType::Chocolate => Vec3::new(-100.0, -300.0, 0.0),
             IngredientType::Milk => Vec3::new(-80.0, -300.0, 0.0),
             IngredientType::Strawberry => Vec3::new(250.0, -300.0, 0.0),
+            IngredientType::Carrot => Vec3::new(150.0, -300.0, 0.0),
         }
     };
 
@@ -583,15 +596,17 @@ struct Cake(CakeType);
 enum CakeType {
     Chocolate,
     Fraisier,
+    Carrot,
 }
 
 // NOTE: Could be a macro to autogen?
 impl Distribution<CakeType> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> CakeType {
-        let index: u8 = rng.gen_range(0..2);
+        let index: u8 = rng.gen_range(0..3);
         match index {
             0 => CakeType::Chocolate,
             1 => CakeType::Fraisier,
+            2 => CakeType::Carrot,
             _ => unreachable!(),
         }
     }
@@ -602,6 +617,7 @@ fn spawn_cake(commands: &mut Commands, position: Vec3, cake: CakeType, parent: &
         match cake {
             CakeType::Chocolate => Color::SALMON,
             CakeType::Fraisier => Color::GOLD,
+            CakeType::Carrot => Color::ORANGE,
         }
     };
 
@@ -633,7 +649,8 @@ fn spawn_display_cake(
     let color = {
         match cake {
             CakeType::Chocolate => Color::SALMON,
-            CakeType::Fraisier => Color::GOLD,
+          CakeType::Fraisier => Color::GOLD,
+          CakeType::Carrot => Color::ORANGE
         }
     };
 
