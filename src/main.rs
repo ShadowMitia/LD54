@@ -1,7 +1,7 @@
 use bevy::{
     prelude::*,
     sprite::collide_aabb::collide,
-    utils::{HashMap, HashSet},
+    utils::{HashMap},
 };
 
 #[derive(Component)]
@@ -297,7 +297,7 @@ fn jump_system(
         commands.entity(*entity).remove::<Jumping>();
     }
     for (ent, mut acc, is_jumping) in player.iter_mut() {
-        if !is_jumping.is_some() && keyboard_input.just_pressed(KeyCode::Space) {
+        if is_jumping.is_none() && keyboard_input.just_pressed(KeyCode::Space) {
             acc.0.y += 100.0;
             commands.entity(ent).insert(Jumping);
         }
@@ -386,32 +386,30 @@ fn trigger_ingredient_system(
             sprite.0.truncate(),
         );
 
-        if collision.is_some() {
-            if !inventory.items.contains(&Some(ing.clone())) {
-                let toto = inventory.items.iter_mut().find(|el| el == &&mut None);
+        if collision.is_some() && !inventory.items.contains(&Some(ing.clone())) {
+            let toto = inventory.items.iter_mut().find(|el| el.is_none());
 
-                if let Some(toto) = toto {
-                    *toto = Some(ing.clone());
-                } else {
-                    // Inventory full
-                    break;
-                }
-
-                let count = inventory.items.iter().filter(|&el| el != &None).count();
-
-                let diff = match count {
-                    0 => unreachable!(),
-                    1 => -1.5,
-                    2 => -0.75,
-                    3 => 0.75,
-                    4 => 1.5,
-                    _ => unreachable!(),
-                };
-
-                commands.entity(ingredient).set_parent(player);
-                transform.scale = Vec3::new(0.5, 0.5, 0.0);
-                transform.translation = Vec3::new(10.0 * diff, 10.0, 10.0);
+            if let Some(toto) = toto {
+                *toto = Some(ing.clone());
+            } else {
+                // Inventory full
+                break;
             }
+
+            let count = inventory.items.iter().filter(|&el| el.is_some()).count();
+
+            let diff = match count {
+                0 => unreachable!(),
+                1 => -1.5,
+                2 => -0.75,
+                3 => 0.75,
+                4 => 1.5,
+                _ => unreachable!(),
+            };
+
+            commands.entity(ingredient).set_parent(player);
+            transform.scale = Vec3::new(0.5, 0.5, 0.0);
+            transform.translation = Vec3::new(10.0 * diff, 10.0, 10.0);
         }
     }
 }
@@ -431,7 +429,7 @@ fn teller_system(
     >,
     q_ingredients: Query<(Entity, &Cake)>,
 ) {
-    let (player, player_trans, player_sprite, mut inventory, children) =
+    let (_player, player_trans, player_sprite, mut inventory, _children) =
         q_player.get_single_mut().expect("Always a player");
 
     for (transform, sprite) in q.iter_mut() {
@@ -444,8 +442,8 @@ fn teller_system(
         );
 
         if collision.is_some() {
-            if let Some(cake) = &inventory.cake {
-                let (ent, cake) = q_ingredients.get_single().expect("Should be a cake there");
+            if let Some(_cake) = &inventory.cake {
+                let (ent, _cake) = q_ingredients.get_single().expect("Should be a cake there");
                 commands.entity(ent).despawn_recursive();
                 inventory.cake = None;
             }
@@ -493,10 +491,10 @@ fn cooking_table_system(
         ),
         With<Player>,
     >,
-    q_ingredients: Query<(Entity, &Ingredient)>,
+    _q_ingredients: Query<(Entity, &Ingredient)>,
     recipes: Res<Recipes>,
 ) {
-    let (player, player_trans, player_sprite, mut inventory, children) =
+    let (player, player_trans, player_sprite, mut inventory, _children) =
         q_player.get_single_mut().expect("Always a player");
 
     for (transform, sprite) in q.iter_mut() {
@@ -608,17 +606,15 @@ fn bin_system(
         bin_box.0.truncate(),
     );
 
-    if collision.is_some() {
-        if keyboard_input.just_pressed(KeyCode::C) {
-            for item in inventory.items.iter_mut() {
-                if let Some(ing) = item {
-                    spawn_ingredient(&mut commands, ing.clone());
-                }
-                *item = None;
+    if collision.is_some() && keyboard_input.just_pressed(KeyCode::C) {
+        for item in inventory.items.iter_mut() {
+            if let Some(ing) = item {
+                spawn_ingredient(&mut commands, ing.clone());
             }
-            inventory.cake = None;
-
-            commands.entity(player).despawn_descendants();
+            *item = None;
         }
+        inventory.cake = None;
+
+        commands.entity(player).despawn_descendants();
     }
 }
