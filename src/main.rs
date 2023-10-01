@@ -117,7 +117,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 #[derive(Component)]
 struct GameElement;
 
-fn setup_game(mut commands: Commands, mut recipes: ResMut<Recipes>, mut score: ResMut<Score>) {
+fn setup_game(
+    mut commands: Commands,
+    mut recipes: ResMut<Recipes>,
+    mut score: ResMut<Score>,
+    asset_server: Res<AssetServer>,
+) {
     score.0 = 0;
 
     commands.insert_resource(LevelTimer(Timer::new(
@@ -238,13 +243,12 @@ fn setup_game(mut commands: Commands, mut recipes: ResMut<Recipes>, mut score: R
 
     spawn_display_cake(&mut commands, Vec3::new(0.0, 30.0, 0.0), cake, id);
 
-
-    spawn_ingredient(&mut commands, IngredientType::Eggs);
-    spawn_ingredient(&mut commands, IngredientType::Flour);
-    spawn_ingredient(&mut commands, IngredientType::Chocolate);
-    spawn_ingredient(&mut commands, IngredientType::Milk);
-    spawn_ingredient(&mut commands, IngredientType::Strawberry);
-  spawn_ingredient(&mut commands, IngredientType::Carrot);
+    spawn_ingredient(&asset_server, &mut commands, IngredientType::Eggs);
+    spawn_ingredient(&asset_server, &mut commands, IngredientType::Flour);
+    spawn_ingredient(&asset_server, &mut commands, IngredientType::Chocolate);
+    spawn_ingredient(&asset_server, &mut commands, IngredientType::Milk);
+    spawn_ingredient(&asset_server, &mut commands, IngredientType::Strawberry);
+    spawn_ingredient(&asset_server, &mut commands, IngredientType::Carrot);
 
     // Cooking table
     commands.spawn((
@@ -424,15 +428,19 @@ enum IngredientType {
     Carrot,
 }
 
-fn spawn_ingredient(commands: &mut Commands, ingredient: IngredientType) {
+fn spawn_ingredient(
+    asset_server: &Res<AssetServer>,
+    commands: &mut Commands,
+    ingredient: IngredientType,
+) {
     let color = {
         match ingredient {
-            IngredientType::Eggs => Color::YELLOW,
-            IngredientType::Flour => Color::WHITE,
-            IngredientType::Chocolate => Color::MAROON,
-            IngredientType::Milk => Color::ANTIQUE_WHITE,
-            IngredientType::Strawberry => Color::PINK,
-            IngredientType::Carrot => Color::ORANGE,
+            IngredientType::Eggs => asset_server.load("sprites/eggs.png"),
+            IngredientType::Flour => asset_server.load("sprites/flour.png"),
+            IngredientType::Chocolate => asset_server.load("sprites/chocolate.png"),
+            IngredientType::Milk => asset_server.load("sprites/milk.png"),
+            IngredientType::Strawberry => asset_server.load("sprites/strawberry.png"),
+            IngredientType::Carrot => asset_server.load("sprites/carrot.png"),
         }
     };
 
@@ -449,12 +457,8 @@ fn spawn_ingredient(commands: &mut Commands, ingredient: IngredientType) {
 
     commands.spawn((
         SpriteBundle {
-            sprite: Sprite {
-                color,
-                custom_size: Some(Vec2::new(32.0, 32.0)),
-                ..default()
-            },
-            transform: Transform::from_translation(position),
+            texture: color,
+            transform: Transform::from_translation(position).with_scale(Vec3::new(0.4, 0.4, 0.0)),
             ..default()
         },
         Ingredient(ingredient),
@@ -505,7 +509,7 @@ fn trigger_ingredient_system(
             };
 
             commands.entity(ingredient).set_parent(player);
-            transform.scale = Vec3::new(0.5, 0.5, 0.0);
+            transform.scale = Vec3::new(0.3, 0.3, 0.0);
             transform.translation = Vec3::new(10.0 * diff, 10.0, 10.0);
         }
     }
@@ -649,8 +653,8 @@ fn spawn_display_cake(
     let color = {
         match cake {
             CakeType::Chocolate => Color::SALMON,
-          CakeType::Fraisier => Color::GOLD,
-          CakeType::Carrot => Color::ORANGE
+            CakeType::Fraisier => Color::GOLD,
+            CakeType::Carrot => Color::ORANGE,
         }
     };
 
@@ -688,6 +692,7 @@ fn cooking_table_system(
     >,
     _q_ingredients: Query<(Entity, &Ingredient)>,
     recipes: Res<Recipes>,
+    asset_server: Res<AssetServer>,
 ) {
     let (player, player_trans, player_sprite, mut inventory, _children) =
         q_player.get_single_mut().expect("Always a player");
@@ -726,7 +731,7 @@ fn cooking_table_system(
                 // Clear all ingredients
                 for item in inventory.items.iter_mut() {
                     if let Some(item) = item {
-                        spawn_ingredient(&mut commands, item.clone());
+                        spawn_ingredient(&asset_server, &mut commands, item.clone());
                     }
                     *item = None;
                 }
@@ -772,6 +777,7 @@ fn bin_system(
     q_bin: Query<(&Transform, &TriggerBox), With<Bin>>,
     mut q_player: Query<(Entity, &Transform, &CollisionBox, &mut Inventory)>,
     keyboard_input: Res<Input<KeyCode>>,
+    asset_server: Res<AssetServer>,
 ) {
     let (player, player_trans, player_box, mut inventory) =
         q_player.get_single_mut().expect("Always a player");
@@ -789,7 +795,7 @@ fn bin_system(
     if collision.is_some() && keyboard_input.just_pressed(KeyCode::C) {
         for item in inventory.items.iter_mut() {
             if let Some(ing) = item {
-                spawn_ingredient(&mut commands, ing.clone());
+                spawn_ingredient(&asset_server, &mut commands, ing.clone());
             }
             *item = None;
         }
