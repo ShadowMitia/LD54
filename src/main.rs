@@ -1,4 +1,6 @@
-use bevy::{prelude::*, sprite::collide_aabb::collide, utils::HashMap};
+use std::time::Duration;
+
+use bevy::{app::AppExit, prelude::*, sprite::collide_aabb::collide, utils::HashMap};
 
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 
@@ -8,12 +10,50 @@ struct CollisionBox(Vec3);
 #[derive(Component)]
 struct TriggerBox(Vec3);
 
+#[derive(Resource)]
+struct Score(usize);
+
+#[derive(Resource)]
+struct LevelTimer(Timer);
+
+#[derive(Default, States, Clone, PartialEq, Eq, Debug, Hash)]
+enum GameState {
+    #[default]
+    MainMenu,
+    InGame,
+    EndScreen,
+}
+
+fn despawn_all<T: Component>(to_despawn: Query<Entity, With<T>>, mut commands: Commands) {
+    info!(
+        "despawn all {:#?} ({})",
+        std::any::type_name::<T>(),
+        to_despawn.iter().count()
+    );
+    for entity in &to_despawn {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
 fn main() {
     App::new()
+        .add_state::<GameState>()
         .add_event::<OnGroundEvent>()
         .insert_resource(Recipes(HashMap::new()))
-        .add_plugins(DefaultPlugins)
+        .insert_resource(Score(0))
+        /* General systems */
         .add_systems(Startup, setup)
+        .add_systems(Update, (button_system, bevy::window::close_on_esc))
+        /* Main menu */
+        .add_plugins(DefaultPlugins)
+        .add_systems(OnEnter(GameState::MainMenu), setup_title_menu)
+        .add_systems(
+            Update,
+            (title_menu, title_menu_action).run_if(in_state(GameState::MainMenu)),
+        )
+        .add_systems(OnExit(GameState::MainMenu), despawn_all::<TitleMenu>)
+        /* In game systems */
+        .add_systems(OnEnter(GameState::InGame), setup_game)
         .add_systems(
             Update,
             (
@@ -23,17 +63,28 @@ fn main() {
                 physics_system,
                 collision_system,
             )
-                .chain(),
+                .chain()
+                .run_if(in_state(GameState::InGame)),
         )
         .add_systems(
             Update,
             (
+                level_timer_system,
                 trigger_ingredient_system,
                 teller_system,
                 cooking_table_system,
                 bin_system,
-            ),
+            )
+                .run_if(in_state(GameState::InGame)),
         )
+        /* End screen */
+        .add_systems(OnEnter(GameState::EndScreen), setup_end_screen)
+        .add_systems(Update, title_menu_action)
+        .add_systems(
+            OnExit(GameState::EndScreen),
+            (despawn_all::<EndScreen>, despawn_all::<GameElement>),
+        )
+        /* Run all this mess! */
         .run();
 }
 
@@ -54,8 +105,26 @@ struct Velocity(Vec3);
 #[derive(Component)]
 struct Acceleration(Vec3);
 
-fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2dBundle::default());
+
+    commands.spawn(AudioBundle {
+        source: asset_server.load("music/Sakura Girl - Paris.ogg"),
+        ..default()
+    });
+}
+
+#[derive(Component)]
+struct GameElement;
+
+fn setup_game(mut commands: Commands, mut recipes: ResMut<Recipes>, mut score: ResMut<Score>) {
+    score.0 = 0;
+
+    commands.insert_resource(LevelTimer(Timer::new(
+        //        Duration::from_secs(60 * 15),
+        Duration::from_secs(1),
+        TimerMode::Once,
+    )));
 
     let r = vec![
         (
@@ -96,6 +165,7 @@ fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
         },
         Collision,
         CollisionBox(Vec3::new(2000.0, 60.0, 0.0)),
+        GameElement,
     ));
 
     // Teller
@@ -113,6 +183,7 @@ fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
         CollisionBox(Vec3::new(24.0, 35.0, 0.0)),
         Teller,
         TriggerBox(Vec3::new(30.0, 36.0, 0.0)),
+        GameElement,
     ));
 
     commands.spawn((
@@ -130,6 +201,7 @@ fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
         Collision,
         CollisionBox(Vec3::new(32.0, 32.0, 0.0)),
         Inventory::new(),
+        GameElement,
     ));
 
     let cake: CakeType = rand::random();
@@ -151,6 +223,7 @@ fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
         Acceleration(Vec3::ZERO),
         Collision,
         CollisionBox(Vec3::new(32.0, 32.0, 0.0)),
+        GameElement,
     ));
 
     let id = &npc.id();
@@ -178,6 +251,7 @@ fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
         CollisionBox(Vec3::new(44.0, 35.0, 0.0)),
         CookingTable,
         TriggerBox(Vec3::new(50.0, 40.0, 0.0)),
+        GameElement,
     ));
 
     // Bin
@@ -193,6 +267,7 @@ fn setup(mut commands: Commands, mut recipes: ResMut<Recipes>) {
         },
         Bin,
         TriggerBox(Vec3::new(50.0, 40.0, 0.0)),
+        GameElement,
     ));
 }
 
@@ -371,6 +446,7 @@ fn spawn_ingredient(commands: &mut Commands, ingredient: IngredientType) {
         },
         Ingredient(ingredient),
         TriggerBox(Vec3::new(40.0, 40.0, 0.0)),
+        GameElement,
     ));
 }
 
@@ -440,6 +516,7 @@ fn teller_system(
         With<Player>,
     >,
     q_ingredients: Query<(Entity, &Cake)>,
+    mut score: ResMut<Score>,
 ) {
     let (_player, player_trans, player_sprite, mut inventory, _children) =
         q_player.get_single_mut().expect("Always a player");
@@ -460,6 +537,8 @@ fn teller_system(
 
                 let (ent, Cake(cake)) = q_ingredients.get_single().expect("Should be a cake there");
                 if npc.wants == *cake {
+                    score.0 += 1;
+
                     commands.entity(ent).despawn_recursive();
                     commands.entity(npc_e).despawn_descendants();
 
@@ -538,6 +617,7 @@ fn spawn_cake(commands: &mut Commands, position: Vec3, cake: CakeType, parent: &
                 ..default()
             },
             Cake(cake),
+            GameElement,
         ))
         .set_parent(*parent)
         .id();
@@ -558,15 +638,19 @@ fn spawn_display_cake(
     };
 
     let id = commands
-        .spawn((SpriteBundle {
-            sprite: Sprite {
-                color,
-                custom_size: Some(Vec2::new(32.0, 32.0)),
+        .spawn((
+            SpriteBundle {
+                sprite: Sprite {
+                    color,
+                    custom_size: Some(Vec2::new(32.0, 32.0)),
+                    ..default()
+                },
+                transform: Transform::from_translation(position)
+                    .with_scale(Vec3::new(0.4, 0.4, 0.0)),
                 ..default()
             },
-            transform: Transform::from_translation(position).with_scale(Vec3::new(0.4, 0.4, 0.0)),
-            ..default()
-        },))
+            GameElement,
+        ))
         .set_parent(*parent)
         .id();
     id
@@ -696,4 +780,292 @@ fn bin_system(
 
         commands.entity(player).despawn_descendants();
     }
+}
+
+/// Spawn a new bomb in set intervals of time
+fn level_timer_system(
+    time: Res<Time>,
+    mut timer: ResMut<LevelTimer>,
+    mut app_state: ResMut<NextState<GameState>>,
+) {
+    // tick the timer
+    timer.0.tick(time.delta());
+
+    if timer.0.finished() {
+        app_state.set(GameState::EndScreen);
+    }
+}
+
+// MAIN MENU
+
+#[derive(Component)]
+struct TitleMenu;
+
+#[derive(Component)]
+enum TitleMenuAction {
+    NewGame,
+    Quit,
+}
+
+fn setup_title_menu(mut commands: Commands) {
+    // Common style for all buttons on the screen
+    let button_style = Style {
+        width: Val::Px(250.0),
+        height: Val::Px(65.0),
+        margin: UiRect::all(Val::Px(20.0)),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    };
+
+    let button_text_style = TextStyle {
+        font_size: 40.0,
+        color: Color::WHITE,
+        ..default()
+    };
+
+    commands
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(100.0),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                ..default()
+            },
+            TitleMenu,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn(NodeBundle {
+                    style: Style {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(40.0),
+			position_type: PositionType::Absolute,
+			bottom: Val::Px(0.0),
+                        ..default()
+                    },
+                    background_color: Color::CRIMSON.into(),
+                    ..default()
+                })
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle::from_section(r#"    Music "Paris" by Sakura Girl (https://officialsakuragirl.wixsite.com/official)"#,
+                            TextStyle {
+                                font_size: 20.0,
+                                color: Color::WHITE,
+                                ..default()
+                            },
+                        )
+                        .with_style(Style { ..default() }),
+                        // Because this is a distinct label widget and
+                        // not button/list item text, this is necessary
+                        // for accessibility to treat the text accordingly.
+                        Label,
+                    ));
+                });
+
+            parent
+                .spawn(NodeBundle {
+                    style: Style {
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    background_color: Color::CRIMSON.into(),
+                    ..default()
+                })
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle::from_section(
+                            "Truly Teeny Tiny Bakery",
+                            TextStyle {
+                                font_size: 60.0,
+                                color: Color::WHITE,
+                                ..default()
+                            },
+                        )
+                        .with_style(Style {
+                            margin: UiRect::all(Val::Px(20.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        }),
+                        // Because this is a distinct label widget and
+                        // not button/list item text, this is necessary
+                        // for accessibility to treat the text accordingly.
+                        Label,
+                    ));
+
+                    parent
+                        .spawn((
+                            ButtonBundle {
+                                style: button_style.clone(),
+                                background_color: NORMAL_BUTTON.into(),
+                                ..default()
+                            },
+                            TitleMenuAction::NewGame,
+                        ))
+                        .with_children(|parent| {
+                            parent.spawn(TextBundle::from_section(
+                                "New Game",
+                                button_text_style.clone(),
+                            ));
+                        });
+                    parent
+                        .spawn((
+                            ButtonBundle {
+                                style: button_style.clone(),
+                                background_color: NORMAL_BUTTON.into(),
+                                ..default()
+                            },
+                            TitleMenuAction::Quit,
+                        ))
+                        .with_children(|parent| {
+                            parent
+                                .spawn(TextBundle::from_section("Quit", button_text_style.clone()));
+                        });
+                });
+        });
+}
+
+fn title_menu(keyboard_input: Res<Input<KeyCode>>, mut app_state: ResMut<NextState<GameState>>) {}
+
+fn title_menu_action(
+    interaction_query: Query<
+        (&Interaction, &TitleMenuAction),
+        (Changed<Interaction>, With<Button>),
+    >,
+    mut app_exit_events: EventWriter<AppExit>,
+    mut app_state: ResMut<NextState<GameState>>,
+) {
+    for (interaction, menu_button_action) in &interaction_query {
+        if *interaction == Interaction::Pressed {
+            match menu_button_action {
+                TitleMenuAction::NewGame => app_state.set(GameState::InGame),
+                TitleMenuAction::Quit => app_exit_events.send(AppExit),
+            }
+        }
+    }
+}
+
+const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
+const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+
+fn button_system(
+    mut interaction_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        (Changed<Interaction>, With<Button>),
+    >,
+) {
+    for (interaction, mut color) in &mut interaction_query {
+        *color = match *interaction {
+            Interaction::Pressed => PRESSED_BUTTON.into(),
+            Interaction::Hovered => HOVERED_BUTTON.into(),
+            Interaction::None => NORMAL_BUTTON.into(),
+        }
+    }
+}
+
+#[derive(Component)]
+struct EndScreen;
+
+fn setup_end_screen(mut commands: Commands, score: Res<Score>) {
+    let score = score.0;
+
+    // Common style for all buttons on the screen
+    let button_style = Style {
+        width: Val::Percent(100.0),
+        height: Val::Px(65.0),
+        margin: UiRect::all(Val::Px(20.0)),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    };
+
+    let button_text_style = TextStyle {
+        font_size: 40.0,
+        color: Color::WHITE,
+        ..default()
+    };
+
+    commands
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(100.0),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                ..default()
+            },
+            EndScreen,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn(NodeBundle {
+                    style: Style {
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    background_color: Color::CRIMSON.into(),
+                    ..default()
+                })
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle::from_section(
+                            format!("Well done!\nYou sold {score} cakes!"),
+                            TextStyle {
+                                font_size: 60.0,
+                                color: Color::WHITE,
+                                ..default()
+                            },
+                        )
+                        .with_style(Style {
+                            margin: UiRect::all(Val::Px(20.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        }),
+                        // Because this is a distinct label widget and
+                        // not button/list item text, this is necessary
+                        // for accessibility to treat the text accordingly.
+                        Label,
+                    ));
+
+                    parent
+                        .spawn((
+                            ButtonBundle {
+                                style: button_style.clone(),
+                                background_color: NORMAL_BUTTON.into(),
+                                ..default()
+                            },
+                            TitleMenuAction::NewGame,
+                        ))
+                        .with_children(|parent| {
+                            parent.spawn(TextBundle::from_section(
+                                "New Game",
+                                button_text_style.clone(),
+                            ));
+                        });
+                    parent
+                        .spawn((
+                            ButtonBundle {
+                                style: button_style.clone(),
+                                background_color: NORMAL_BUTTON.into(),
+                                ..default()
+                            },
+                            TitleMenuAction::Quit,
+                        ))
+                        .with_children(|parent| {
+                            parent
+                                .spawn(TextBundle::from_section("Quit", button_text_style.clone()));
+                        });
+                });
+        });
 }
