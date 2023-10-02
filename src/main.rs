@@ -186,13 +186,13 @@ fn setup_game(
         SpriteBundle {
             texture: asset_server.load("sprites/teller.png"),
             transform: Transform::from_xyz(-400.0, -300.0, 0.0)
-                .with_scale(Vec3::new(0.3, 0.3, 0.0)),
+                .with_scale(Vec3::new(0.6, 0.6, 0.0)),
             ..default()
         },
         Collision,
-        CollisionBox(Vec3::new(24.0, 35.0, 0.0)),
+        CollisionBox(Vec3::new(48.0, 70.0, 0.0)),
         Teller,
-        TriggerBox(Vec3::new(30.0, 36.0, 0.0)),
+        TriggerBox(Vec3::new(60.0, 72.0, 0.0)),
         GameElement,
     ));
 
@@ -200,16 +200,17 @@ fn setup_game(
         SpriteBundle {
             sprite: Sprite {
                 color: Color::GREEN,
-                custom_size: Some(Vec2::new(32.0, 32.0)),
+                custom_size: Some(Vec2::new(64.0, 64.0)),
                 ..default()
             },
+          transform: Transform::from_xyz(-320.0, -280.0, 0.0),
             ..default()
         },
         Player,
         Velocity(Vec3::ZERO),
         Acceleration(Vec3::ZERO),
         Collision,
-        CollisionBox(Vec3::new(32.0, 32.0, 0.0)),
+        CollisionBox(Vec3::new(64.0, 64.0, 0.0)),
         Inventory::new(),
         GameElement,
     ));
@@ -220,7 +221,7 @@ fn setup_game(
         SpriteBundle {
             sprite: Sprite {
                 color: Color::CYAN,
-                custom_size: Some(Vec2::new(32.0, 32.0)),
+                custom_size: Some(Vec2::new(64.0, 64.0)),
                 ..default()
             },
             transform: Transform::from_xyz(-500.0, -200.0, 0.0),
@@ -232,7 +233,7 @@ fn setup_game(
         Velocity(Vec3::ZERO),
         Acceleration(Vec3::ZERO),
         Collision,
-        CollisionBox(Vec3::new(32.0, 32.0, 0.0)),
+        CollisionBox(Vec3::new(64.0, 64.0, 0.0)),
         GameElement,
     ));
 
@@ -257,13 +258,13 @@ fn setup_game(
     commands.spawn((
         SpriteBundle {
             texture: asset_server.load("sprites/cake_machine.png"),
-            transform: Transform::from_xyz(400.0, -300.0, 0.0).with_scale(Vec3::new(0.3, 0.3, 0.0)),
+            transform: Transform::from_xyz(500.0, -220.0, 0.0).with_scale(Vec3::new(0.6, 0.6, 0.0)),
             ..default()
         },
         Collision,
-        CollisionBox(Vec3::new(44.0, 35.0, 0.0)),
+        CollisionBox(Vec3::new(368.0*0.6, 369.0*0.6, 0.0)),
         CookingTable,
-        TriggerBox(Vec3::new(50.0, 40.0, 0.0)),
+        TriggerBox(Vec3::new(368.0*0.65, 369.0*0.65, 0.0)),
         GameElement,
     ));
 
@@ -271,20 +272,37 @@ fn setup_game(
     commands.spawn((
         SpriteBundle {
             texture: asset_server.load("sprites/bin.png"),
-            transform: Transform::from_xyz(-350.0, -300.0, 0.0)
-                .with_scale(Vec3::new(0.3, 0.3, 0.0)),
+            transform: Transform::from_xyz(-300.0, -290.0, -10.0)
+                .with_scale(Vec3::new(0.6, 0.6, 0.0)),
             ..default()
         },
         Bin,
         TriggerBox(Vec3::new(50.0, 40.0, 0.0)),
         GameElement,
     ));
+
+
+  // Platform
+
+  commands.spawn((SpriteBundle {
+    sprite: Sprite {
+      color: Color::MAROON,
+      custom_size: Some(Vec2::new(500.0, 20.0)),
+      ..default()
+    },
+    transform: Transform::from_translation( Vec3::new(0.0, -230.0, 0.0)),
+    ..default()
+  },
+                  Collision,
+  CollisionBox(Vec3::new(500.0, 20.0, 0.0))));
+
+
 }
 
 fn gravity_system(mut q_physics: Query<&mut Acceleration>) {
     for mut acc in q_physics.iter_mut() {
         //info!("oh gravity");
-        acc.0.y -= 1.0;
+        acc.0.y -= 10.0;
     }
 }
 
@@ -391,7 +409,7 @@ fn jump_system(
     }
     for (ent, mut acc, is_jumping) in player.iter_mut() {
         if is_jumping.is_none() && keyboard_input.just_pressed(KeyCode::Space) {
-            acc.0.y += 100.0;
+            acc.0.y += 500.0;
             commands.entity(ent).insert(Jumping);
         }
     }
@@ -442,19 +460,19 @@ fn spawn_ingredient(
 
     let position = {
         match ingredient {
-            IngredientType::Eggs => Vec3::new(0.0, -300.0, 0.0),
-            IngredientType::Flour => Vec3::new(200.0, -300.0, 0.0),
-            IngredientType::Chocolate => Vec3::new(-100.0, -300.0, 0.0),
-            IngredientType::Milk => Vec3::new(-80.0, -300.0, 0.0),
-            IngredientType::Strawberry => Vec3::new(250.0, -300.0, 0.0),
-            IngredientType::Carrot => Vec3::new(150.0, -300.0, 0.0),
+            IngredientType::Eggs => Vec3::new(-30.0, -300.0, 0.0),
+            IngredientType::Flour => Vec3::new(30.0, -300.0, 0.0),
+          IngredientType::Milk => Vec3::new(0.0, -0.0, 0.0),
+          IngredientType::Chocolate => Vec3::new(20.0, -190.0, 0.0),
+            IngredientType::Strawberry => Vec3::new(-150.0, -190.0, 0.0),
+            IngredientType::Carrot => Vec3::new(200.0, -190.0, 0.0),
         }
     };
 
     commands.spawn((
         SpriteBundle {
             texture: color,
-            transform: Transform::from_translation(position).with_scale(Vec3::new(0.4, 0.4, 0.0)),
+            transform: Transform::from_translation(position).with_scale(Vec3::new(0.8, 0.8, 0.0)),
             ..default()
         },
         Ingredient(ingredient),
@@ -664,7 +682,7 @@ fn spawn_display_cake(
             SpriteBundle {
                 texture: color,
                 transform: Transform::from_translation(position)
-                    .with_scale(Vec3::new(0.4, 0.4, 0.0)),
+                    .with_scale(Vec3::new(0.8, 0.8, 0.0)),
                 ..default()
             },
             GameElement,
