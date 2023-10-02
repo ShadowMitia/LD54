@@ -18,8 +18,8 @@ struct LevelTimer(Timer);
 
 #[derive(Default, States, Clone, PartialEq, Eq, Debug, Hash)]
 enum GameState {
-    #[default]
     MainMenu,
+    #[default]
     InGame,
     EndScreen,
 }
@@ -184,12 +184,9 @@ fn setup_game(
     // Teller
     commands.spawn((
         SpriteBundle {
-            sprite: Sprite {
-                color: Color::PURPLE,
-                custom_size: Some(Vec2::new(24.0, 35.0)),
-                ..default()
-            },
-            transform: Transform::from_xyz(-400.0, -300.0, 0.0),
+            texture: asset_server.load("sprites/teller.png"),
+            transform: Transform::from_xyz(-400.0, -300.0, 0.0)
+                .with_scale(Vec3::new(0.3, 0.3, 0.0)),
             ..default()
         },
         Collision,
@@ -259,12 +256,8 @@ fn setup_game(
     // Cooking table
     commands.spawn((
         SpriteBundle {
-            sprite: Sprite {
-                color: Color::RED,
-                custom_size: Some(Vec2::new(44.0, 35.0)),
-                ..default()
-            },
-            transform: Transform::from_xyz(400.0, -300.0, 0.0),
+            texture: asset_server.load("sprites/cake_machine.png"),
+            transform: Transform::from_xyz(400.0, -300.0, 0.0).with_scale(Vec3::new(0.3, 0.3, 0.0)),
             ..default()
         },
         Collision,
@@ -277,12 +270,9 @@ fn setup_game(
     // Bin
     commands.spawn((
         SpriteBundle {
-            sprite: Sprite {
-                color: Color::DARK_GRAY,
-                custom_size: Some(Vec2::new(44.0, 35.0)),
-                ..default()
-            },
-            transform: Transform::from_xyz(-350.0, -300.0, 0.0),
+            texture: asset_server.load("sprites/bin.png"),
+            transform: Transform::from_xyz(-350.0, -300.0, 0.0)
+                .with_scale(Vec3::new(0.3, 0.3, 0.0)),
             ..default()
         },
         Bin,
