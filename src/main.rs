@@ -74,6 +74,7 @@ fn main() {
                 teller_system,
                 cooking_table_system,
                 bin_system,
+                update_score_ui,
             )
                 .run_if(in_state(GameState::InGame)),
         )
@@ -203,7 +204,7 @@ fn setup_game(
                 custom_size: Some(Vec2::new(64.0, 64.0)),
                 ..default()
             },
-          transform: Transform::from_xyz(-320.0, -280.0, 0.0),
+            transform: Transform::from_xyz(-320.0, -280.0, 0.0),
             ..default()
         },
         Player,
@@ -262,9 +263,9 @@ fn setup_game(
             ..default()
         },
         Collision,
-        CollisionBox(Vec3::new(368.0*0.6, 369.0*0.6, 0.0)),
+        CollisionBox(Vec3::new(368.0 * 0.6, 369.0 * 0.6, 0.0)),
         CookingTable,
-        TriggerBox(Vec3::new(368.0*0.65, 369.0*0.65, 0.0)),
+        TriggerBox(Vec3::new(368.0 * 0.65, 369.0 * 0.65, 0.0)),
         GameElement,
     ));
 
@@ -281,22 +282,82 @@ fn setup_game(
         GameElement,
     ));
 
+    // Platform
+    commands.spawn((
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::MAROON,
+                custom_size: Some(Vec2::new(500.0, 20.0)),
+                ..default()
+            },
+            transform: Transform::from_translation(Vec3::new(0.0, -230.0, 0.0)),
+            ..default()
+        },
+        Collision,
+        CollisionBox(Vec3::new(500.0, 20.0, 0.0)),
+        GameElement,
+    ));
 
-  // Platform
+    // Game UI
 
-  commands.spawn((SpriteBundle {
-    sprite: Sprite {
-      color: Color::MAROON,
-      custom_size: Some(Vec2::new(500.0, 20.0)),
-      ..default()
-    },
-    transform: Transform::from_translation( Vec3::new(0.0, -230.0, 0.0)),
-    ..default()
-  },
-                  Collision,
-  CollisionBox(Vec3::new(500.0, 20.0, 0.0))));
+    commands
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(50.0),
+                    height: Val::Percent(10.0),
+                    ..default()
+                },
+                ..default()
+            },
+            EndScreen,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn(NodeBundle {
+                    style: Style {
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    background_color: Color::CRIMSON.into(),
+                    ..default()
+                })
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle::from_section(
+                            format!("Sold cakes: 0"),
+                            TextStyle {
+                                font_size: 30.0,
+                                color: Color::WHITE,
+                                ..default()
+                            },
+                        )
+                        .with_style(Style {
+                            margin: UiRect::all(Val::Px(20.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        }),
+                        ScoreUI,
+                        // Because this is a distinct label widget and
+                        // not button/list item text, this is necessary
+                        // for accessibility to treat the text accordingly.
+                        Label,
+                    ));
+                });
+        });
+}
 
+#[derive(Component)]
+struct ScoreUI;
 
+fn update_score_ui(score: Res<Score>, mut query: Query<&mut Text, With<ScoreUI>>) {
+    if score.is_changed() {
+        let score = score.0;
+        let mut score_ui = query.get_single_mut().expect("We got UI");
+        score_ui.sections[0].value = format!("Sold cakes: {score}");
+    }
 }
 
 fn gravity_system(mut q_physics: Query<&mut Acceleration>) {
@@ -462,8 +523,8 @@ fn spawn_ingredient(
         match ingredient {
             IngredientType::Eggs => Vec3::new(-30.0, -300.0, 0.0),
             IngredientType::Flour => Vec3::new(30.0, -300.0, 0.0),
-          IngredientType::Milk => Vec3::new(0.0, -0.0, 0.0),
-          IngredientType::Chocolate => Vec3::new(20.0, -190.0, 0.0),
+            IngredientType::Milk => Vec3::new(0.0, -0.0, 0.0),
+            IngredientType::Chocolate => Vec3::new(20.0, -190.0, 0.0),
             IngredientType::Strawberry => Vec3::new(-150.0, -190.0, 0.0),
             IngredientType::Carrot => Vec3::new(200.0, -190.0, 0.0),
         }
