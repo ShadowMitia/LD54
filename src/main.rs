@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use bevy::{app::AppExit, prelude::*, sprite::collide_aabb::collide, utils::HashMap};
+use bevy::{
+    app::AppExit, audio::PlaybackMode, prelude::*, sprite::collide_aabb::collide, utils::HashMap,
+};
 
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 
@@ -18,8 +20,8 @@ struct LevelTimer(Timer);
 
 #[derive(Default, States, Clone, PartialEq, Eq, Debug, Hash)]
 enum GameState {
-    MainMenu,
     #[default]
+    MainMenu,
     InGame,
     EndScreen,
 }
@@ -112,6 +114,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     commands.spawn(AudioBundle {
         source: asset_server.load("music/Sakura Girl - Paris.ogg"),
+        settings: PlaybackSettings {
+            mode: PlaybackMode::Loop,
+            ..default()
+        },
         ..default()
     });
 }
@@ -219,34 +225,81 @@ fn setup_game(
 
     let cake: CakeType = rand::random();
 
-    let npc = commands.spawn((
-        SpriteBundle {
-            sprite: Sprite {
-                color: Color::CYAN,
-                custom_size: Some(Vec2::new(64.0, 64.0)),
+    let id = commands
+        .spawn((
+            SpriteBundle {
+                sprite: Sprite {
+                    color: Color::CYAN,
+                    custom_size: Some(Vec2::new(64.0, 64.0)),
+                    ..default()
+                },
+                transform: Transform::from_xyz(-500.0, -200.0, 0.0),
                 ..default()
             },
-            transform: Transform::from_xyz(-500.0, -200.0, 0.0),
-            ..default()
-        },
-        NPC {
-            wants: cake.clone(),
-        },
-        Velocity(Vec3::ZERO),
-        Acceleration(Vec3::ZERO),
-        Collision,
-        CollisionBox(Vec3::new(64.0, 64.0, 0.0)),
-        GameElement,
-    ));
+            NPC {
+                wants: cake.clone(),
+            },
+            Velocity(Vec3::ZERO),
+            Acceleration(Vec3::ZERO),
+            Collision,
+            CollisionBox(Vec3::new(64.0, 64.0, 0.0)),
+            GameElement,
+        ))
+        .id();
 
-    let id = &npc.id();
+    commands
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    position_type: PositionType::Absolute,
+                    bottom: Val::Px(200.0),
+                    left: Val::Px(10.0),
+                    ..default()
+                },
+                ..default()
+            },
+            EndScreen,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn(NodeBundle {
+                    style: Style {
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    ..default()
+                })
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle::from_section(
+                            format!("I want this cake, please!"),
+                            TextStyle {
+                                font_size: 20.0,
+                                color: Color::WHITE,
+                                ..default()
+                            },
+                        )
+                        .with_style(Style {
+                            margin: UiRect::all(Val::Px(20.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        }),
+                        // Because this is a distinct label widget and
+                        // not button/list item text, this is necessary
+                        // for accessibility to treat the text accordingly.
+                        Label,
+                    ));
+                });
+        });
 
     spawn_display_cake(
         &asset_server,
         &mut commands,
-        Vec3::new(0.0, 30.0, 0.0),
+        Vec3::new(0.0, 60.0, 0.0),
         cake,
-        id,
+        &id,
     );
 
     spawn_ingredient(&asset_server, &mut commands, IngredientType::Eggs);
@@ -533,7 +586,7 @@ fn jump_system(
         commands.entity(*entity).remove::<Jumping>();
     }
     for (ent, mut acc, is_jumping) in player.iter_mut() {
-        if is_jumping.is_none() && keyboard_input.just_pressed(KeyCode::Space) {
+        if is_jumping.is_none() && keyboard_input.just_pressed(KeyCode::Up) {
             acc.0.y += 500.0;
             commands.entity(ent).insert(Jumping);
         }
@@ -706,7 +759,7 @@ fn teller_system(
                     spawn_display_cake(
                         &asset_server,
                         &mut commands,
-                        Vec3::new(0.0, 30.0, 0.0),
+                        Vec3::new(0.0, 60.0, 0.0),
                         npc.wants.clone(),
                         &npc_e,
                     );
@@ -933,7 +986,7 @@ fn bin_system(
         bin_box.0.truncate(),
     );
 
-    if collision.is_some() && keyboard_input.just_pressed(KeyCode::C) {
+    if collision.is_some() && keyboard_input.just_pressed(KeyCode::Down) {
         for item in inventory.items.iter_mut() {
             if let Some(ing) = item {
                 spawn_ingredient(&asset_server, &mut commands, ing.clone());
@@ -1091,6 +1144,30 @@ fn setup_title_menu(mut commands: Commands) {
                             parent
                                 .spawn(TextBundle::from_section("Quit", button_text_style.clone()));
                         });
+
+
+		                        parent.spawn((
+                        TextBundle::from_section(
+                            "Left-Right arrows to move\n
+Up arrow to jump\n
+Down arrow on bin to clear inventory",
+                            TextStyle {
+                                font_size: 30.0,
+                                color: Color::WHITE,
+                                ..default()
+                            },
+                        )
+                        .with_style(Style {
+                            margin: UiRect::all(Val::Px(20.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        }),
+                        // Because this is a distinct label widget and
+                        // not button/list item text, this is necessary
+                        // for accessibility to treat the text accordingly.
+                        Label,
+                    ));
                 });
         });
 }
