@@ -1,6 +1,6 @@
 # Truly Teeny Tiny Bakery
 
-A game made solo during the Ludum Dare 54!
+A game made solo during the [Ludum Dare 54](https://ldjam.com/events/ludum-dare/54/truly-teeny-tiny-bakery)!
 
 ![Screenshot from 2023-10-02 22-54-31](https://github.com/ShadowMitia/LD54/assets/3752363/faabf9d4-1c5c-4a1c-8092-3bc8529b8c77)
 
@@ -19,5 +19,4 @@ Just use the arrow keys!
 All code and assets by me are MIT license
 
 Music : Sakura Girl - Paris
-Link :    • 【Royalty Free Music】 Sakura Girl - Paris  
-
+Link :    • 【Royalty Free Music】 Sakura Girl - Paris
