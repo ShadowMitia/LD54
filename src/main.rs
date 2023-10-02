@@ -241,7 +241,13 @@ fn setup_game(
 
     let id = &npc.id();
 
-    spawn_display_cake(&mut commands, Vec3::new(0.0, 30.0, 0.0), cake, id);
+    spawn_display_cake(
+        &asset_server,
+        &mut commands,
+        Vec3::new(0.0, 30.0, 0.0),
+        cake,
+        id,
+    );
 
     spawn_ingredient(&asset_server, &mut commands, IngredientType::Eggs);
     spawn_ingredient(&asset_server, &mut commands, IngredientType::Flour);
@@ -534,6 +540,7 @@ fn teller_system(
     >,
     q_ingredients: Query<(Entity, &Cake)>,
     mut score: ResMut<Score>,
+    asset_server: Res<AssetServer>,
 ) {
     let (_player, player_trans, player_sprite, mut inventory, _children) =
         q_player.get_single_mut().expect("Always a player");
@@ -564,6 +571,7 @@ fn teller_system(
                     npc.wants = rand::random();
 
                     spawn_display_cake(
+                        &asset_server,
                         &mut commands,
                         Vec3::new(0.0, 30.0, 0.0),
                         npc.wants.clone(),
@@ -616,23 +624,25 @@ impl Distribution<CakeType> for Standard {
     }
 }
 
-fn spawn_cake(commands: &mut Commands, position: Vec3, cake: CakeType, parent: &Entity) -> Entity {
+fn spawn_cake(
+    asset_server: &Res<AssetServer>,
+    commands: &mut Commands,
+    position: Vec3,
+    cake: CakeType,
+    parent: &Entity,
+) -> Entity {
     let color = {
         match cake {
-            CakeType::Chocolate => Color::SALMON,
-            CakeType::Fraisier => Color::GOLD,
-            CakeType::Carrot => Color::ORANGE,
+            CakeType::Chocolate => asset_server.load("sprites/cake_chocolate.png"),
+            CakeType::Fraisier => asset_server.load("sprites/cake_strawberry.png"),
+            CakeType::Carrot => asset_server.load("sprites/cake_carrot.png"),
         }
     };
 
     let id = commands
         .spawn((
             SpriteBundle {
-                sprite: Sprite {
-                    color,
-                    custom_size: Some(Vec2::new(32.0, 32.0)),
-                    ..default()
-                },
+                texture: color,
                 transform: Transform::from_translation(position),
                 ..default()
             },
@@ -645,6 +655,7 @@ fn spawn_cake(commands: &mut Commands, position: Vec3, cake: CakeType, parent: &
 }
 
 fn spawn_display_cake(
+    asset_server: &Res<AssetServer>,
     commands: &mut Commands,
     position: Vec3,
     cake: CakeType,
@@ -652,20 +663,16 @@ fn spawn_display_cake(
 ) -> Entity {
     let color = {
         match cake {
-            CakeType::Chocolate => Color::SALMON,
-            CakeType::Fraisier => Color::GOLD,
-            CakeType::Carrot => Color::ORANGE,
+            CakeType::Chocolate => asset_server.load("sprites/cake_chocolate.png"),
+            CakeType::Fraisier => asset_server.load("sprites/cake_strawberry.png"),
+            CakeType::Carrot => asset_server.load("sprites/cake_carrot.png"),
         }
     };
 
     let id = commands
         .spawn((
             SpriteBundle {
-                sprite: Sprite {
-                    color,
-                    custom_size: Some(Vec2::new(32.0, 32.0)),
-                    ..default()
-                },
+                texture: color,
                 transform: Transform::from_translation(position)
                     .with_scale(Vec3::new(0.4, 0.4, 0.0)),
                 ..default()
@@ -740,6 +747,7 @@ fn cooking_table_system(
 
                 // Spawn the cake
                 spawn_cake(
+                    &asset_server,
                     &mut commands,
                     Vec3::new(0.0, 40.0, 0.0),
                     cake.clone(),
