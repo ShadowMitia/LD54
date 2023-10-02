@@ -75,6 +75,7 @@ fn main() {
                 cooking_table_system,
                 bin_system,
                 update_score_ui,
+                update_timer_ui,
             )
                 .run_if(in_state(GameState::InGame)),
         )
@@ -127,7 +128,7 @@ fn setup_game(
     score.0 = 0;
 
     commands.insert_resource(LevelTimer(Timer::new(
-        Duration::from_secs(60 * 15),
+        Duration::from_secs(60 * 5),
         TimerMode::Once,
     )));
 
@@ -347,6 +348,54 @@ fn setup_game(
                     ));
                 });
         });
+
+    commands
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(50.0),
+                    height: Val::Percent(10.0),
+                    ..default()
+                },
+                ..default()
+            },
+            EndScreen,
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn(NodeBundle {
+                    style: Style {
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    background_color: Color::CRIMSON.into(),
+                    ..default()
+                })
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle::from_section(
+                            format!("Time left 00:00"),
+                            TextStyle {
+                                font_size: 30.0,
+                                color: Color::WHITE,
+                                ..default()
+                            },
+                        )
+                        .with_style(Style {
+                            margin: UiRect::all(Val::Px(20.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        }),
+                        TimerUI,
+                        // Because this is a distinct label widget and
+                        // not button/list item text, this is necessary
+                        // for accessibility to treat the text accordingly.
+                        Label,
+                    ));
+                });
+        });
 }
 
 #[derive(Component)]
@@ -357,6 +406,21 @@ fn update_score_ui(score: Res<Score>, mut query: Query<&mut Text, With<ScoreUI>>
         let score = score.0;
         let mut score_ui = query.get_single_mut().expect("We got UI");
         score_ui.sections[0].value = format!("Sold cakes: {score}");
+    }
+}
+
+#[derive(Component)]
+struct TimerUI;
+
+fn update_timer_ui(score: Res<LevelTimer>, mut query: Query<&mut Text, With<TimerUI>>) {
+    if score.is_changed() {
+        let duration = &score.0.duration().as_secs();
+        let elapsed = &score.0.elapsed().as_secs();
+        let diff = duration - elapsed;
+        let seconds = diff % 60;
+        let minutes = (diff / 60) % 60;
+        let mut timer_ui = query.get_single_mut().expect("We got UI");
+        timer_ui.sections[0].value = format!("Time left {:0>2}:{:0>2}", minutes, seconds);
     }
 }
 
