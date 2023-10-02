@@ -1237,9 +1237,11 @@ fn setup_end_screen(mut commands: Commands, score: Res<Score>) {
         .spawn((
             NodeBundle {
                 style: Style {
-                    width: Val::Percent(100.0),
+                    width: Val::Vw(100.0),
+                    height: Val::Vh(100.0),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
+                    position_type: PositionType::Absolute,
                     ..default()
                 },
                 ..default()
