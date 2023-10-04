@@ -20,3 +20,5 @@ All code and assets by me are MIT license
 
 Music : Sakura Girl - Paris
 Link :    • 【Royalty Free Music】 Sakura Girl - Paris
+
+Sprites made with [Inkscape](https://inkscape.org/)!
