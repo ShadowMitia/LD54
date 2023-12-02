@@ -16,9 +16,8 @@ Just use the arrow keys!
 
 # Credits
 
-All code and assets by me are MIT license
-
-Music : Sakura Girl - Paris
-Link :    • 【Royalty Free Music】 Sakura Girl - Paris
-
+All code and assets by me are MIT license.
 Sprites made with [Inkscape](https://inkscape.org/)!
+
+Music : [• 【Royalty Free Music】 Sakura Girl - Paris](https://youtu.be/dxArSDd6WL4)
+
